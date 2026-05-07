@@ -1,1 +1,5 @@
--- I have some changes!
+CREATE OR REPLACE TABLE project_one (
+    id INT AUTOINCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
