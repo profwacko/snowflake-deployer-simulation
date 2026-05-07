@@ -55,7 +55,7 @@ def collect_files_prod():
         if not any(p.startswith(rel_subdir + "/") for p in changed):
             continue
         yaml_path = os.path.join(subdir, "prod.yaml")
-        print(f"Loading prod.yaml: {yaml_path}")
+        print(f"Loading prod.yaml: {os.path.relpath(yaml_path, REPO_ROOT)}")
         with open(yaml_path) as f:
             paths = yaml.safe_load(f)
         if not paths:

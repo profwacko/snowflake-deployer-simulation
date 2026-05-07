@@ -1,6 +1,1 @@
-CREATE OR REPLACE TABLE project_one (
-    id INT AUTOINCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    status VARCHAR(50) DEFAULT 'active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- This table has some changes for prod!
