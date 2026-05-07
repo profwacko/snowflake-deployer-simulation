@@ -6,7 +6,7 @@ import yaml
 
 
 SNOWFLAKE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "snowflake")
-PROD_YAML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prod.yaml")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def tryint(s):
@@ -35,29 +35,45 @@ def collect_files_non_prod():
 
 
 def collect_files_prod():
-    """Read prod.yaml and collect whitelisted files relative to src/snowflake."""
-    with open(PROD_YAML) as f:
-        paths = yaml.safe_load(f)
-
-    if not paths:
-        raise ValueError("prod.yaml is empty or invalid")
-
-    files = []
-    for path in paths:
-        full_path = os.path.join(SNOWFLAKE_DIR, path)
-        if not os.path.isfile(full_path):
-            raise FileNotFoundError(f"File listed in prod.yaml not found: {full_path}")
-        files.append(full_path)
-    return files
-
-
-# Reference implementation provided as a starting point for contributors.
-def collect_files_changed():
-    """Collect .sql files under src/snowflake that changed vs. origin/master."""
+    """Walk src/snowflake for prod.yaml files; execute each only if changes detected in that directory."""
     import subprocess
 
     result = subprocess.run(
         ["git", "diff", "--name-only", "origin/master...HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    changed = set(result.stdout.splitlines())
+
+    files = []
+    for subdir, dirs, filenames in os.walk(SNOWFLAKE_DIR, topdown=True):
+        dirs.sort(key=alphanum_key)
+        if "prod.yaml" not in filenames:
+            continue
+        rel_subdir = os.path.relpath(subdir, REPO_ROOT).replace(os.sep, "/")
+        if not any(p.startswith(rel_subdir + "/") for p in changed):
+            continue
+        yaml_path = os.path.join(subdir, "prod.yaml")
+        with open(yaml_path) as f:
+            paths = yaml.safe_load(f)
+        if not paths:
+            raise ValueError(f"{yaml_path} is empty or invalid")
+        for path in paths:
+            full_path = os.path.join(subdir, path)
+            if not os.path.isfile(full_path):
+                raise FileNotFoundError(f"File listed in {yaml_path} not found: {full_path}")
+            files.append(full_path)
+    return files
+
+
+# Reference implementation provided as a starting point for contributors.
+def collect_files_changed(base_branch):
+    """Collect .sql files under src/snowflake that changed vs. origin/<base_branch>."""
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "diff", "--name-only", f"origin/{base_branch}...HEAD"],
         capture_output=True,
         text=True,
         check=True,
@@ -92,15 +108,22 @@ def main():
         )
         sys.exit(1)
 
-    if env == "NON_PROD":
+    if env == "DEV":
+        print("Running in DEV mode: executing diffs lexicographically.")
+        files = collect_files_changed("dev")
+    elif env == "UAT":
+        print("Running in UAT mode: executing diffs lexicographically.")
+        files = collect_files_changed("uat")
+    elif env == "NON_PROD":
         print("Running in NON-PROD mode: executing diffs lexicographically.")
-        files = collect_files_changed()
+        files = collect_files_changed("master")
     elif env == "PROD":
         print("Running in PROD mode: executing whitelisted files from prod.yaml.")
         files = collect_files_prod()
     else:
         print(
-            f"ERROR: Unknown ENV value '{env}'. Use NON_PROD or PROD.", file=sys.stderr
+            f"ERROR: Unknown ENV value '{env}'. Use DEV, UAT, NON_PROD, or PROD.",
+            file=sys.stderr,
         )
         sys.exit(1)
 
